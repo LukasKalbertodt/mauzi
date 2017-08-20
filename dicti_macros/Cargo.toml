@@ -1,0 +1,13 @@
+[package]
+name = "dicti_macros"
+version = "0.1.0"
+authors = ["Lukas Kalbertodt <lukas.kalbertodt@gmail.com>"]
+
+
+[lib]
+name = "dicti_macros"
+proc-macro = true
+
+[dependencies]
+literalext = "0.1"
+proc-macro2 = { version = "0.1", features = ["unstable"] }
