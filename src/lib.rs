@@ -1,27 +1,28 @@
-#[macro_use]
+#![feature(proc_macro)]
+
 extern crate dicti_macros;
 
-// #[macro_use]
-// pub mod makro;
+pub use dicti_macros::dict;
 
-#[derive(Debug)]
-pub enum Loc {
-    De,
-    En,
-    Other(String),
+
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum Locale {
+    De(DeRegion),
+    En(EnRegion),
 }
 
-// hello_world {
-//     En => : "Hello World";
-//     De => : "Hallo Welt";
-// }
-dict! {
-    hello_world {
-        En => "Hello World",
-        De => "Hallo Welt",
+impl Locale {
+    pub fn de() -> Self {
+        Locale::De(DeRegion::None)
     }
-    greet(name: &str) {
-        En => "Hi {name}",
-        De => "Hallo {name}",
+
+    pub fn en() -> Self {
+        Locale::En(EnRegion::None)
     }
 }
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum DeRegion { None, De, Ch, At }
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum EnRegion { None, Us, Gb }

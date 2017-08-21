@@ -1,27 +1,32 @@
-#[macro_use] extern crate dicti;
+#![feature(proc_macro)]
 
-dict! {
-    hello_world() {
-        En => : "Hello World";
-        De => : "Hallo Welt";
-    }
-    greet(name: &str) {
-        En =>
-            : "Hi ";
-            : name;
-        De =>
-            : "Hallo ";
-            : name;
+extern crate dicti;
+
+use dicti::Locale;
+
+
+mod dicto {
+    use dicti::dict;
+
+    dict! {
+        hello_world {
+            En => "Hello World",
+            De(Ch) => "Hallo Welt",
+            _ => "no idea...",
+        }
+        greet(name: &str, age: u8) {
+            En => "Hi {name} with age {age}",
+            De => {
+                (2 + 4).to_string()
+            }
+        }
     }
 }
 
-fn main() {
-    use dicti::Loc;
 
-    let dict = Dict::new(
-        if std::env::args().count() == 2 { Loc::De } else { Loc::En }
-    );
+fn main() {
+    let dict = dicto::Dict::new(Locale::de());
 
     println!("{}", dict.hello_world());
-    println!("{}", dict.greet("Lukas"));
+    println!("{}", dict.greet("Lukas", 23));
 }
