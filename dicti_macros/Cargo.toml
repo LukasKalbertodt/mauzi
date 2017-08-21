@@ -10,5 +10,4 @@ proc-macro = true
 
 [dependencies]
 literalext = { version = "0.1", default-features = false, features = ["proc-macro"] }
-proc-macro2 = { version = "0.1", features = ["unstable"] }
-quote = "0.3"
+dicti_runtime = { path = "../dicti_runtime" }

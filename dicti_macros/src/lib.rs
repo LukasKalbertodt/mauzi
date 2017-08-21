@@ -2,6 +2,7 @@
 
 extern crate literalext;
 extern crate proc_macro;
+extern crate dicti_runtime;
 
 use std::result::Result as StdResult;
 
@@ -15,6 +16,6 @@ type Result<T> = StdResult<T, String>;
 #[proc_macro]
 pub fn dict(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     parse::parse(input)
-        .and_then(|ast| gen::gen(&ast))
+        .and_then(gen::gen)
         .unwrap_or_else(|e| panic!(e))
 }

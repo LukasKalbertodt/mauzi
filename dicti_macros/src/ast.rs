@@ -1,3 +1,4 @@
+use std::ops::Deref;
 use proc_macro::{Span, Term, TokenNode, TokenStream, TokenTree};
 
 
@@ -49,13 +50,22 @@ pub enum ArmPattern {
     },
 }
 
+impl ArmPattern {
+    pub fn is_underscore(&self) -> bool {
+        match *self {
+            ArmPattern::Underscore => true,
+            _ => false,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum ArmBody {
     Str(String),
     Raw(TokenStream),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct Ident {
     term: Term,
 }
@@ -65,10 +75,6 @@ impl Ident {
         Self {
             term: Term::intern(s),
         }
-    }
-
-    pub fn hidden(&self) -> TokenNode {
-        TokenNode::Term(self.term)
     }
 
     pub fn exported(&self) -> TokenTree {
@@ -81,10 +87,27 @@ impl Ident {
     pub fn export(s: &str) -> TokenTree {
         Self::new(s).exported()
     }
+
+    pub fn as_str(&self) -> &str {
+        self.term.as_str()
+    }
+}
+
+impl Deref for Ident {
+    type Target = str;
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
+    }
 }
 
 impl From<Term> for Ident {
     fn from(term: Term) -> Self {
         Self { term }
+    }
+}
+
+impl Into<TokenStream> for Ident {
+    fn into(self) -> TokenStream {
+        TokenNode::Term(self.term).into()
     }
 }
