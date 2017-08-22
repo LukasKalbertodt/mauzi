@@ -1,7 +1,7 @@
 #![feature(proc_macro)]
 
-extern crate dicti_macros;
-extern crate dicti_runtime;
+extern crate mauzi_macros;
+extern crate mauzi_runtime;
 
-pub use dicti_macros::dict;
-pub use dicti_runtime::*;
+pub use mauzi_macros::dict;
+pub use mauzi_runtime::*;

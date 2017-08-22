@@ -1,13 +1,13 @@
 [package]
-name = "dicti_macros"
+name = "mauzi_macros"
 version = "0.1.0"
 authors = ["Lukas Kalbertodt <lukas.kalbertodt@gmail.com>"]
 
 
 [lib]
-name = "dicti_macros"
+name = "mauzi_macros"
 proc-macro = true
 
 [dependencies]
 literalext = { version = "0.1", default-features = false, features = ["proc-macro"] }
-dicti_runtime = { path = "../dicti_runtime" }
+mauzi_runtime = { path = "../mauzi_runtime" }

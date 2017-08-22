@@ -1,8 +1,8 @@
 [package]
-name = "dicti"
+name = "mauzi"
 version = "0.1.0"
 authors = ["Lukas Kalbertodt <lukas.kalbertodt@gmail.com>"]
 
 [dependencies]
-dicti_macros = { path = "dicti_macros/" }
-dicti_runtime = { path = "dicti_runtime/" }
+mauzi_macros = { path = "mauzi_macros/" }
+mauzi_runtime = { path = "mauzi_runtime/" }
