@@ -253,6 +253,7 @@ impl Iter {
         self.0.next();
     }
 
+    #[allow(dead_code)]
     fn into_debug_output(self) -> String {
         self.0.map(|e| format!("{:?}\n", e)).collect()
     }
