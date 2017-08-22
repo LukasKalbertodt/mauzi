@@ -204,47 +204,81 @@ fn gen_arm_pattern(pattern: ast::ArmPattern, last: bool) -> Result<TokenStream> 
 /// Generates the body of a match arm.
 fn gen_arm_body(body: ast::ArmBody) -> Result<TokenStream> {
     match body {
+        ast::ArmBody::Raw(ts) => Ok(ts),
         ast::ArmBody::Str(s) => {
+            // We need to convert the fancy placeholder string into a
+            // `format!()` expression. We do this by first going through the
+            // fancy format string with an FSA like algorithm, splitting it
+            // into the real format string and the arguments.
+
             #[derive(Clone, Copy)]
             enum State {
+                /// The last char we read belonged to the real format string
+                /// and will be printed verbatim, or (special case) we just
+                /// exited a placeholder.
                 Normal,
+                /// The last char we read was part of a placeholder, or
+                /// (special case) we just entered a placeholder.
                 InPlaceholder,
             }
 
             let mut state = State::Normal;
             let mut it = s.chars().peekable();
 
+            // We will pass `format_str` as the first argument of `format!()`
+            // later. `args` contains all other arguments.
             let mut format_str = String::new();
             let mut args = Vec::new();
 
             while let Some(c) = it.next() {
                 match (state, c) {
+                    // Entering a placeholder
                     (State::Normal, '{') => {
+                        // If the next one is `{` it's an escaped brace and we
+                        // shall copy both braces verbatim to the format
+                        // string.
                         if let Some(&'{') = it.peek() {
                             it.next();
                             format_str.push_str("{{");
                         } else {
+                            // Start a new argument and change the state.
                             args.push(String::new());
                             state = State::InPlaceholder;
                         }
                     }
+                    // Outside of a placeholder, just copying
                     (State::Normal, _) => {
                         format_str.push(c);
                     }
+                    // Exiting a placeholder
                     (State::InPlaceholder, '}') => {
+                        format_str.push_str("{}");
                         state = State::Normal;
                     }
+                    // Inside of a placeholder, copying to the last argument
                     (State::InPlaceholder, _) => {
                         args.last_mut().unwrap().push(c);
                     }
                 }
             }
-            panic!("Format string: {:?}\nargs:{:#?}", format_str, args);
 
-            // TODO: we need to actually do the string interpolation magic here
-            let lit = TokenNode::Literal(Literal::string(&s));
-            Ok(quote! { $lit.to_string() })
+            // We have to parse all argument as token stream: we don't want to
+            // pass them to `format!()` as string literal, but as Rust
+            // expression. We concat all arguments into one token stream.
+            let format_args = args.into_iter().map(|arg_s| {
+                // Try to parse.
+                arg_s.parse::<TokenStream>()
+                    .map_err(|e| format!("not a valid Rust expression in placeholder: {:?}", e))
+                    // Add a leading comma for concatting all arguments.
+                    .map(|ts| quote! { , $ts })
+            }).collect::<Result<TokenStream>>()?;
+
+            // We pass the format string as a literal to `format!()`.
+            let format_str = TokenNode::Literal(Literal::string(&format_str));
+
+            Ok(quote! {
+                format!($format_str $format_args)
+            })
         }
-        ast::ArmBody::Raw(ts) => Ok(ts),
     }
 }
