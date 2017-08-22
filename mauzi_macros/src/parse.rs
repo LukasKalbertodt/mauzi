@@ -11,7 +11,7 @@ use Result;
 pub fn parse(input: TokenStream) -> Result<ast::Dict> {
     let mut iter = Iter::new(input);
 
-    // Collect all translation units in this dictonary.
+    // Collect all translation units in this dictionary.
     let mut trans_units = Vec::new();
     while !iter.is_exhausted() {
         trans_units.push(parse_trans_unit(&mut iter)?);

@@ -20,7 +20,7 @@ mod parse;
 /// type for everything contains a string as error value.
 type Result<T> = StdResult<T, String>;
 
-/// Generates a dictonary hosting translations in different languages.
+/// Generates a dictionary hosting translations in different languages.
 ///
 /// **TODO**: documentation
 #[proc_macro]

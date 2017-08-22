@@ -11,7 +11,7 @@
 //!                parse          gen
 //! ```
 //!
-//! So the AST is the abstract representation of the dictonary after parsing.
+//! So the AST is the abstract representation of the dictionary after parsing.
 //!
 
 
@@ -19,7 +19,7 @@ use std::ops::Deref;
 use proc_macro::{Span, Term, TokenNode, TokenStream, TokenTree};
 
 
-/// A dictonary, consisting of zero or more *translation units*.
+/// A dictionary, consisting of zero or more *translation units*.
 #[derive(Debug, Clone)]
 pub struct Dict {
     pub trans_units: Vec<TransUnit>,
