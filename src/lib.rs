@@ -1,3 +1,4 @@
+//! **TODO:** add documentation
 #![feature(proc_macro)]
 
 extern crate mauzi_macros;

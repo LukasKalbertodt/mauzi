@@ -205,6 +205,42 @@ fn gen_arm_pattern(pattern: ast::ArmPattern, last: bool) -> Result<TokenStream> 
 fn gen_arm_body(body: ast::ArmBody) -> Result<TokenStream> {
     match body {
         ast::ArmBody::Str(s) => {
+            #[derive(Clone, Copy)]
+            enum State {
+                Normal,
+                InPlaceholder,
+            }
+
+            let mut state = State::Normal;
+            let mut it = s.chars().peekable();
+
+            let mut format_str = String::new();
+            let mut args = Vec::new();
+
+            while let Some(c) = it.next() {
+                match (state, c) {
+                    (State::Normal, '{') => {
+                        if let Some(&'{') = it.peek() {
+                            it.next();
+                            format_str.push_str("{{");
+                        } else {
+                            args.push(String::new());
+                            state = State::InPlaceholder;
+                        }
+                    }
+                    (State::Normal, _) => {
+                        format_str.push(c);
+                    }
+                    (State::InPlaceholder, '}') => {
+                        state = State::Normal;
+                    }
+                    (State::InPlaceholder, _) => {
+                        args.last_mut().unwrap().push(c);
+                    }
+                }
+            }
+            panic!("Format string: {:?}\nargs:{:#?}", format_str, args);
+
             // TODO: we need to actually do the string interpolation magic here
             let lit = TokenNode::Literal(Literal::string(&s));
             Ok(quote! { $lit.to_string() })
