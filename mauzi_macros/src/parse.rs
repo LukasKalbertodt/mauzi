@@ -136,14 +136,21 @@ fn parse_unit_body(group: TokenStream) -> Result<ast::UnitBody> {
         // ... followed by the actual body.
         let body = parse_arm_body(&mut iter)?;
 
+        // Maybe eat comma, if haven't reached the end
+        if !iter.is_exhausted() {
+            if body.is_raw_block() {
+                // If the last body was a raw block (delimited by braces) it's
+                // ok to not have a comma.
+                let _ = iter.eat_op_if(',');
+            } else {
+                // If the body was not a raw block, we need a comma!
+                iter.eat_op_if(',')?;
+            }
+        }
+
         arms.push(ast::UnitArm {
             pattern, body
         });
-
-        // Eat comma, if haven't reached the end
-        if !iter.is_exhausted() {
-            iter.eat_op_if(',')?;
-        }
     }
 
     Ok(ast::UnitBody { arms })

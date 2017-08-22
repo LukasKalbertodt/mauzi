@@ -145,6 +145,15 @@ pub enum ArmBody {
     Raw(TokenStream),
 }
 
+impl ArmBody {
+    pub fn is_raw_block(&self) -> bool {
+        match *self {
+            ArmBody::Raw(_) => true,
+            _ => false,
+        }
+    }
+}
+
 /// A Rust type.
 ///
 /// Since we don't want to replicate the Rust type parsing algorithm, we are

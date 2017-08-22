@@ -22,13 +22,13 @@ dict! {
                 1 => "You have one new email".to_string(),
                 _ => format!("You have {} new emails", count),
             }
-        },
+        }
         De => {
             match count {
                 1 => "Sie haben eine neue E-Mail".to_string(),
                 _ => format!("Sie haben {} neue E-Mails", count),
             }
-        },
+        }
     }
 }
 
