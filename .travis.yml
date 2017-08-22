@@ -1,0 +1,13 @@
+language: rust
+rust:
+  - nightly
+
+env:
+  - RUSTFLAGS="--deny warnings"
+
+script: |
+  ci/check-basic-style.sh && \
+  cargo build --verbose && \
+  cargo test --verbose
+
+cache: cargo
