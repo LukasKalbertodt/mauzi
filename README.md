@@ -1,7 +1,7 @@
 Mauzi
 =====
 
-Library to help with internationalization. WIP.
+Library to help with internationalization. WIP. Nightly only: uses `proc_macros`.
 
 
 ## Status
