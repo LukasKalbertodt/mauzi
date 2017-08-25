@@ -1,4 +1,5 @@
 use std::iter::Peekable;
+use std::path::Path;
 
 use proc_macro::{Delimiter, Literal, Spacing, TokenNode, TokenStream, TokenTree, TokenTreeIter};
 use literalext::LiteralExt;
@@ -9,17 +10,22 @@ use Result;
 
 /// Parses the input token stream into an abstract intermediate representation.
 pub fn parse(input: TokenStream) -> Result<ast::Dict> {
+    use std::env;
+
+    // TODO: Oh boy, this is ugly. Well, we can't find out the path of the
+    // `mauzi!` invocation, so we have to cheat a bit. I think this is the best
+    // we can do right now: getting the manifest dir and just assuming that
+    // `mauzi!` was called at the top level.
+    let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+    let src_dir = Path::new(&manifest_dir).join("src");
+
     let mut iter = Iter::new(input);
-
     let locale_def = parse_locale_def(&mut iter)?;
+    let (modules, trans_units) = parse_items(&mut iter, &src_dir)?;
 
-    // Collect all translation units in this dictionary.
-    let mut trans_units = Vec::new();
-    while !iter.is_exhausted() {
-        trans_units.push(parse_trans_unit(&mut iter)?);
-    }
+    panic!("{:#?}", modules);
 
-    Ok(ast::Dict { locale_def, trans_units })
+    Ok(ast::Dict { locale_def, modules, trans_units })
 }
 
 fn parse_locale_def(iter: &mut Iter) -> Result<ast::LocaleDef> {
@@ -70,11 +76,81 @@ fn parse_locale_variant(iter: &mut Iter) -> Result<ast::LocaleLang> {
     })
 }
 
+fn parse_items(iter: &mut Iter, root_path: &Path) -> Result<(Vec<ast::Mod>, Vec<ast::TransUnit>)> {
+    // Collect all translation units and modules.
+    let mut trans_units = Vec::new();
+    let mut modules = Vec::new();
+    while !iter.is_exhausted() {
+        let item_kind = iter.eat_term()?;
+        match item_kind.as_str() {
+            "unit" => trans_units.push(parse_trans_unit(iter)?),
+            "mod" => modules.push(parse_module(iter, root_path)?),
+            s => return Err(format!("expected item, found {}", s)),
+        }
+    }
+
+    Ok((modules, trans_units))
+}
+
+fn parse_module(iter: &mut Iter, root_path: &Path) -> Result<ast::Mod> {
+    use std::fs::File;
+    use std::io::Read;
+
+    // A module declaration has the form `mod name;`. The `mod` keyword was
+    // already consumed by the calling function.
+    let name = iter.eat_term()?;
+    iter.eat_op_if(';')?;
+
+    // Both valid paths.
+    let p0 = root_path
+        .join(name.as_str())
+        .join("mod.mauzi.rs");
+    let p1 = root_path.join(format!("{}.mauzi.rs", name.as_str()));
+
+    // Check that only one of those two files actually exists.
+    let p = match (p0.exists(), p1.exists()) {
+        (false, false) => {
+            return Err(format!(
+                "cannot find either of those files: '{}' or '{}'",
+                p0.display(),
+                p1.display(),
+            ));
+        }
+        (true, true) => {
+            return Err(format!(
+                "Ambiguity when loading module: both, '{}' and '{}' exist",
+                p0.display(),
+                p1.display(),
+            ));
+        }
+        (true, false) => p0,
+        (false, true) => p1,
+    };
+
+    // Read the file's content.
+    let content = {
+        let mut file = File::open(&p).map_err(|e| e.to_string())?;
+        let mut content = String::new();
+        file.read_to_string(&mut content).map_err(|e| e.to_string())?;
+        content
+    };
+
+    // Parse item in file.
+    let tokens: TokenStream = content.parse().map_err(|e| format!("{:?}", e))?;
+    let mut iter = Iter::new(tokens);
+    let (modules, trans_units) = parse_items(&mut iter, p.parent().unwrap())?;
+
+    Ok(ast::Mod {
+        name,
+        modules,
+        trans_units,
+    })
+}
+
 /// Parses one translation unit from the given iterator.
 fn parse_trans_unit(iter: &mut Iter) -> Result<ast::TransUnit> {
-    // Each translation unit starts with the `unit` keyword followed by a name
-    // (required).
-    iter.eat_keyword("unit")?;
+    // Each translation unit starts with the `unit` keyword followed by a name.
+    // The keyword was already eaten by the calling function.
     let name = iter.eat_term()?;
 
     // Get the parsed parameters and the group (brace delimited block)

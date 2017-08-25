@@ -18,7 +18,9 @@ use ast;
 /// parameters of said key. This method internally matches over the actual
 /// locale to decide which "body" to use. Those methods always return a
 /// `String`.
-pub fn gen(ast::Dict { trans_units, locale_def }: ast::Dict) -> Result<TokenStream> {
+pub fn gen(dict: ast::Dict) -> Result<TokenStream> {
+    let ast::Dict { trans_units, modules: _, locale_def } = dict;
+
     // We want to create a few new names which the user can refer to. Due to
     // macro hygiene, we have to create special ident-tokens that live in the
     // same "context" as the invocation of `mauzi!{}` is in. Otherwise, the

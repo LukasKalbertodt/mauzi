@@ -23,6 +23,14 @@ use proc_macro::{Span, Term, TokenNode, TokenStream, TokenTree};
 #[derive(Debug, Clone)]
 pub struct Dict {
     pub locale_def: LocaleDef,
+    pub modules: Vec<Mod>,
+    pub trans_units: Vec<TransUnit>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Mod {
+    pub name: Ident,
+    pub modules: Vec<Mod>,
     pub trans_units: Vec<TransUnit>,
 }
 
