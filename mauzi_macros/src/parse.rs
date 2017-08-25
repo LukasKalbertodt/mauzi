@@ -23,8 +23,6 @@ pub fn parse(input: TokenStream) -> Result<ast::Dict> {
     let locale_def = parse_locale_def(&mut iter)?;
     let (modules, trans_units) = parse_items(&mut iter, &src_dir)?;
 
-    panic!("{:#?}", modules);
-
     Ok(ast::Dict { locale_def, modules, trans_units })
 }
 

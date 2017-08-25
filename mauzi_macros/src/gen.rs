@@ -19,7 +19,7 @@ use ast;
 /// locale to decide which "body" to use. Those methods always return a
 /// `String`.
 pub fn gen(dict: ast::Dict) -> Result<TokenStream> {
-    let ast::Dict { trans_units, modules: _, locale_def } = dict;
+    let ast::Dict { trans_units, modules, locale_def } = dict;
 
     // We want to create a few new names which the user can refer to. Due to
     // macro hygiene, we have to create special ident-tokens that live in the
@@ -28,11 +28,7 @@ pub fn gen(dict: ast::Dict) -> Result<TokenStream> {
     let new_ident = ast::Ident::export("new");
     let locale_ident = locale_def.name();
 
-    // We generate the token streams for all methods and combine them into a
-    // big token stream.
-    let methods = trans_units.into_iter()
-        .map(|unit| gen_trans_unit(unit, &locale_def))
-        .collect::<Result<TokenStream>>()?;
+    let module_tree_def = gen_module(modules, trans_units, &locale_def, "")?;
 
     // Generate the definition of `Locale` and possibly `*Region`.
     let locale = gen_locale(locale_def)?;
@@ -44,17 +40,11 @@ pub fn gen(dict: ast::Dict) -> Result<TokenStream> {
     Ok(quote! {
         $locale
 
-        pub struct Dict {
-            locale: $locale_ident,
-        }
-
         pub fn $new_ident(locale: $locale_ident) -> Dict {
-            Dict { locale }
+            Dict::new(locale)
         }
 
-        impl Dict {
-            $methods
-        }
+        $module_tree_def
     })
 }
 
@@ -113,6 +103,78 @@ fn gen_locale(locale_def: ast::LocaleDef) -> Result<TokenStream> {
 /// Simple helper to generate the name of the region type, e.g. `EnRegion`.
 fn region_ty_name(lang_name: &str) -> TokenTree {
     ast::Ident::export(&format!("{}Region", lang_name))
+}
+
+/// Generates the code for the given module and all of its submodules.
+///
+/// Each module has its own `Dict` type. However, sadly, mauzi-modules don't
+/// map to Rust modules. When I worked on this, emitting Rust-modules was a
+/// pain due to strange visibility effects.
+///
+/// Instead, each `Dict` type gets an ugly prefix. This means that everything
+/// lives in one module, and most of the types have super strange names.
+fn gen_module(
+    sub_modules: Vec<ast::Mod>,
+    trans_units: Vec<ast::TransUnit>,
+    locale: &ast::LocaleDef,
+    stem: &str,
+) -> Result<TokenStream> {
+    let locale_ident = locale.name();
+
+    // We generate the token streams for all sub modules and combine them into
+    // a big stream.
+    let mut sub_module_names = Vec::new();
+    let sub_modules = sub_modules.into_iter().map(|sub| {
+        // Generate new prefix and type name ...
+        let new_stem = format!("{}{}___this_is_a_bad_solution___", stem, sub.name.as_str());
+        let ty_name = ast::Ident::new(&format!("{}Dict", new_stem));
+
+        sub_module_names.push((sub.name, ty_name));
+        gen_module(sub.modules, sub.trans_units, locale, &new_stem)
+    }).collect::<Result<TokenStream>>()?;
+
+    // The fields for submodules in our `Dict` definition
+    let sub_module_fields = sub_module_names.iter().map(|&(name, ty_name)| {
+        let name = name.exported();
+        quote! { pub $name: $ty_name , }
+    }).collect::<TokenStream>();
+
+    // The initializer list of the submodules in our `Dict::new()` method
+    let sub_module_field_inits = sub_module_names.iter().map(|&(name, ty_name)| {
+        let name = name.exported();
+        quote! { $name: $ty_name::new(locale), }
+    }).collect::<TokenStream>();
+
+    // We generate the token streams for all methods and combine them into a
+    // big token stream.
+    let methods = trans_units.into_iter()
+        .map(|unit| gen_trans_unit(unit, locale))
+        .collect::<Result<TokenStream>>()?;
+
+    // Our type name.
+    let ty_name = ast::Ident::new(&format!("{}Dict", stem));
+
+    Ok(quote! {
+        $sub_modules
+
+        #[allow(non_camel_case_types)]
+        #[allow(dead_code)]
+        pub struct $ty_name {
+            locale: $locale_ident,
+            $sub_module_fields
+        }
+
+        impl $ty_name {
+            pub fn new(locale: $locale_ident) -> Self {
+                Self {
+                    locale,
+                    $sub_module_field_inits
+                }
+            }
+
+            $methods
+        }
+    })
 }
 
 /// Takes one translation unit and generates the corresponding Rust code.

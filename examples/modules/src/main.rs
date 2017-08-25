@@ -8,6 +8,18 @@ mod dict;
 fn main() {
     use dict::Locale;
 
-    let dict = dict::new(Locale::De);
-    println!("{}", dict.cat());
+    let locales = [
+        Locale::De,
+        Locale::En,
+    ];
+
+    for &locale in &locales {
+        println!("--- for {:?} ---", locale);
+        let dict = dict::new(locale);
+
+        println!("cat              => {}", dict.cat());
+        println!("foo::greet       => {}", dict.foo.greet("Lukas"));
+        println!("bar::hello_world => {}", dict.bar.hello_world());
+        println!("baz::bye_world   => {}", dict.bar.baz.bye_world());
+    }
 }
