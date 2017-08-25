@@ -1,4 +1,4 @@
-//! This crate defines the proc-macro `dict!`.
+//! This crate defines the proc-macro `mauzi!`.
 //!
 //! You shouldn't use this crate directly, but use `mauzi` instead. The macro
 //! is reexported there.
@@ -23,7 +23,7 @@ type Result<T> = StdResult<T, String>;
 ///
 /// **TODO**: documentation
 #[proc_macro]
-pub fn dict(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn mauzi(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     parse::parse(input)
         .and_then(gen::gen)
         .unwrap_or_else(|e| panic!(e))

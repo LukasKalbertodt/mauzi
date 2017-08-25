@@ -10,7 +10,7 @@ use ast;
 /// the intermediate representations (in this case, this is simply the AST) and
 /// produces an output.
 ///
-/// Specifically, for each `dict!{}` invocation, a new struct-type called
+/// Specifically, for each `mauzi!{}` invocation, a new struct-type called
 /// `Dict` is generated. This type has a `new()` function to create an instance
 /// of it from a `Locale`.
 ///
@@ -21,7 +21,7 @@ use ast;
 pub fn gen(ast::Dict { trans_units, locale_def }: ast::Dict) -> Result<TokenStream> {
     // We want to create a few new names which the user can refer to. Due to
     // macro hygiene, we have to create special ident-tokens that live in the
-    // same "context" as the invocation of `dict!{}` is in. Otherwise, the
+    // same "context" as the invocation of `mauzi!{}` is in. Otherwise, the
     // names would be hidden/trapped inside of our macro context.
     let new_ident = ast::Ident::export("new");
     let locale_ident = locale_def.name();

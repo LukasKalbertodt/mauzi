@@ -5,9 +5,9 @@ extern crate mauzi;
 
 
 mod dict {
-    use mauzi::dict;
+    use mauzi::mauzi;
 
-    dict! {
+    mauzi! {
         enum Locale {
             De,
             En { Gb, Us },
