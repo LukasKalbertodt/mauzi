@@ -13,6 +13,7 @@ use std::result::Result as StdResult;
 mod ast;
 mod gen;
 mod parse;
+mod util;
 
 /// Right now the only way to report errors to the user from within a proc-
 /// macro is to panic, which prints a simple string. So right now our error

@@ -2,6 +2,7 @@ use proc_macro::{quote, Literal, TokenNode, TokenStream, TokenTree};
 
 use Result;
 use ast;
+use util::PatternUsage;
 
 
 /// Generates the resulting Rust code from the AST.
@@ -203,33 +204,26 @@ fn gen_trans_unit(unit: ast::TransUnit, locale: &ast::LocaleDef) -> Result<Token
     }).collect();
 
     // ===== Function body ===================================================
-    // Find out if the user already provided a wildcard arm. If not, we'll
-    // generate one later.
-    let mut has_wildcard = false;
-
-    let last_id = unit.body.arms.len() - 1;
+    // Here we store which variants of the enum were already tested to check
+    // if the match is exhaustive.
+    let mut usage = PatternUsage::new(locale);
 
     // Generate a match arm for each translation arm.
-    let match_arms: TokenStream = unit.body.arms.into_iter()
-        .enumerate()
-        .map(|(i, arm)| {
-            has_wildcard |= arm.pattern.is_underscore();
+    let match_arms: TokenStream = unit.body.arms.into_iter().map(|arm| {
+        // Generate the *matcher* (the left part of a match arm).
+        let pattern = gen_arm_pattern(arm.pattern, &mut usage, locale)?;
 
-            // Generate the *matcher* (the left part of a match arm).
-            let pattern = gen_arm_pattern(arm.pattern, i == last_id, locale)?;
+        // Generate the body of the match arm.
+        let body = gen_arm_body(arm.body)?;
 
-            // Generate the body of the match arm.
-            let body = gen_arm_body(arm.body)?;
-
-            // Combine both into the full match arm
-            Ok(quote! {
-                $pattern => { $body }
-            })
+        // Combine both into the full match arm
+        Ok(quote! {
+            $pattern => { $body }
         })
-        .collect::<Result<_>>()?;
+    }).collect::<Result<_>>()?;
 
     // If the user didn't provide a wildcard arm, we need to add one.
-    let wildcard_arm = if has_wildcard {
+    let wildcard_arm = if usage.is_exhausted() {
         quote! {}
     } else {
         // TODO: maybe we don't want to panic here! Best idea would be to let
@@ -253,13 +247,15 @@ fn gen_trans_unit(unit: ast::TransUnit, locale: &ast::LocaleDef) -> Result<Token
 /// Generates the *matcher* (the left side) of a match arm.
 fn gen_arm_pattern(
     pattern: ast::ArmPattern,
-    last: bool,
+    usage: &mut PatternUsage,
     locale: &ast::LocaleDef
 ) -> Result<TokenStream> {
     let locale_ident = locale.name();
 
     let out = match pattern {
         ast::ArmPattern::Underscore => {
+            usage.use_wildcard(None)?;
+
             quote! { _ }
         }
 
@@ -273,6 +269,8 @@ fn gen_arm_pattern(
             // binding.
             if let Some(lang) = locale.get_lang(&lang_name) {
                 // It is referring to a variant of the `Locale` enum
+                usage.use_lang(&lang_name)?;
+
                 let lang_ident = lang.name();
                 if lang.has_regions() {
                     quote! { $locale_ident::$lang_ident(_) }
@@ -281,6 +279,8 @@ fn gen_arm_pattern(
                 }
             } else {
                 // It is a name for a variable binding
+                usage.use_wildcard(Some(&lang_name))?;
+
                 let lang_ident = lang_name.exported();
                 quote! { $lang_ident }
             }
@@ -308,33 +308,20 @@ fn gen_arm_pattern(
             // region constant or a variable name to bind to.
             if lang.contains_region(&region_name) {
                 // Constant region to match against...
+                usage.use_region(&lang_name, &region_name)?;
+
                 let region_ty = region_ty_name(&lang_name);
                 quote! { $locale_ident::$lang_ident($region_ty::$region_ident) }
             } else {
                 // Variable to bind to
+                usage.use_lang(&lang_name)?;
+
                 quote! { $locale_ident::$lang_ident($region_ident) }
             }
         }
     };
 
-    // Here we need to perform a special trick. The problem is that we need to
-    // provide a wildcard arm to the match block in order to make the code
-    // compile, even when the user didn't make the match exhaustive. We cannot
-    // easily check whether or not the users options exhaust the match, so in
-    // some cases we'll add a wildcard arm although it cannot be reached. This
-    // emits a compiler warning.
-    //
-    // We could disable the warning, but we actually want the warning for the
-    // user's code. The idea is to inject a `if true` match guard to one match
-    // arm given by the user. The compiler doesn't inspect match guards, so it
-    // won't be able to tell that the match is already exhaustive.
-    //
-    // This is a hack, but it's fine for now.
-    if last && !pattern.is_underscore() {
-        Ok(quote! { $out if true })
-    } else {
-        Ok(out)
-    }
+    Ok(out)
 }
 
 /// Generates the body of a match arm.

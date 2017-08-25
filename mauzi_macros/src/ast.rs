@@ -163,15 +163,6 @@ pub enum ArmPattern {
     },
 }
 
-impl ArmPattern {
-    pub fn is_underscore(&self) -> bool {
-        match *self {
-            ArmPattern::Underscore => true,
-            _ => false,
-        }
-    }
-}
-
 /// The body of one arm.
 ///
 /// Right now we support two kinds of bodies:
