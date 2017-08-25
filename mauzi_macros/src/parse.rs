@@ -11,7 +11,7 @@ use Result;
 pub fn parse(input: TokenStream) -> Result<ast::Dict> {
     let mut iter = Iter::new(input);
 
-    let locale = parse_locale_def(&mut iter)?;
+    let locale_def = parse_locale_def(&mut iter)?;
 
     // Collect all translation units in this dictionary.
     let mut trans_units = Vec::new();
@@ -19,7 +19,7 @@ pub fn parse(input: TokenStream) -> Result<ast::Dict> {
         trans_units.push(parse_trans_unit(&mut iter)?);
     }
 
-    Ok(ast::Dict { locale, trans_units })
+    Ok(ast::Dict { locale_def, trans_units })
 }
 
 fn parse_locale_def(iter: &mut Iter) -> Result<ast::LocaleDef> {

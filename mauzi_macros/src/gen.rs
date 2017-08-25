@@ -1,6 +1,4 @@
-use proc_macro::{quote, Literal, TokenNode, TokenStream};
-
-use mauzi_runtime::Locale;
+use proc_macro::{quote, Literal, TokenNode, TokenStream, TokenTree};
 
 use Result;
 use ast;
@@ -20,44 +18,103 @@ use ast;
 /// parameters of said key. This method internally matches over the actual
 /// locale to decide which "body" to use. Those methods always return a
 /// `String`.
-pub fn gen(dict: ast::Dict) -> Result<TokenStream> {
+pub fn gen(ast::Dict { trans_units, locale_def }: ast::Dict) -> Result<TokenStream> {
     // We want to create a few new names which the user can refer to. Due to
     // macro hygiene, we have to create special ident-tokens that live in the
     // same "context" as the invocation of `dict!{}` is in. Otherwise, the
     // names would be hidden/trapped inside of our macro context.
-    let dict_ident = ast::Ident::export("Dict");
     let new_ident = ast::Ident::export("new");
+    let locale_ident = locale_def.name();
 
     // We generate the token streams for all methods and combine them into a
     // big token stream.
-    let methods = dict.trans_units.into_iter()
-        .map(gen_trans_unit)
+    let methods = trans_units.into_iter()
+        .map(|unit| gen_trans_unit(unit, &locale_def))
         .collect::<Result<TokenStream>>()?;
 
+    // Generate the definition of `Locale` and possibly `*Region`.
+    let locale = gen_locale(locale_def)?;
 
     // Now we just return this quoted Rust code.
     //
     // We need to refer to the `Locale` type from the `mauzi_runtime` crate,
     // but there isn't a good way to do that currently.
     Ok(quote! {
-        extern crate mauzi;
+        $locale
 
-        pub struct $dict_ident {
-            locale: mauzi::Locale,
+        pub struct Dict {
+            locale: $locale_ident,
         }
 
-        impl $dict_ident {
-            pub fn $new_ident(locale: mauzi::Locale) -> Self {
-                Self { locale }
-            }
+        pub fn $new_ident(locale: $locale_ident) -> Dict {
+            Dict { locale }
+        }
 
+        impl Dict {
             $methods
         }
     })
 }
 
+/// Generates the definition of the `Locale` enum as well as all potential
+/// `*Region` enums.
+fn gen_locale(locale_def: ast::LocaleDef) -> Result<TokenStream> {
+    let locale_ident = locale_def.name();
+
+    // In this vector we collect all region types we have to generate.
+    let mut region_types = Vec::new();
+
+    // Collect all variants of the `Locale` enum
+    let langs = locale_def.langs.into_iter().map(|lang| {
+        let name = lang.name.exported();
+
+        if lang.regions.is_empty() {
+            // If the language doesn't contain region, it's a simple
+            // variant ...
+            quote! { $name , }
+        } else {
+            // ... otherwise it is a tuple-variant.
+            let region_ty = region_ty_name(lang.name.as_str());
+            region_types.push((region_ty.clone(), lang.regions));
+
+            quote! { $name ( $region_ty ) , }
+        }
+    }).collect::<TokenStream>();
+
+    // Collect all definitions of region types.
+    let region_types = region_types.into_iter().map(|(ident, regions)| {
+        let regions = regions.into_iter()
+            .map(|region_name| {
+                let region_name = region_name.exported();
+                quote! { $region_name , }
+            })
+            .collect::<TokenStream>();
+
+        quote! {
+            #[derive(Debug, Clone, Copy)]
+            pub enum $ident {
+                $regions
+            }
+        }
+    }).collect::<TokenStream>();
+
+    Ok(quote! {
+        #[derive(Debug, Clone, Copy)]
+        pub enum $locale_ident {
+            $langs
+        }
+
+        $region_types
+    })
+}
+
+/// Simple helper to generate the name of the region type, e.g. `EnRegion`.
+fn region_ty_name(lang_name: &str) -> TokenTree {
+    ast::Ident::export(&format!("{}Region", lang_name))
+}
+
 /// Takes one translation unit and generates the corresponding Rust code.
-fn gen_trans_unit(unit: ast::TransUnit) -> Result<TokenStream> {
+fn gen_trans_unit(unit: ast::TransUnit, locale: &ast::LocaleDef) -> Result<TokenStream> {
     // ===== Function signature ==============================================
     // We want to make the name of the translation unit available to the user.
     let name = unit.name.exported();
@@ -95,7 +152,7 @@ fn gen_trans_unit(unit: ast::TransUnit) -> Result<TokenStream> {
             has_wildcard |= arm.pattern.is_underscore();
 
             // Generate the *matcher* (the left part of a match arm).
-            let pattern = gen_arm_pattern(arm.pattern, i == last_id)?;
+            let pattern = gen_arm_pattern(arm.pattern, i == last_id, locale)?;
 
             // Generate the body of the match arm.
             let body = gen_arm_body(arm.body)?;
@@ -130,7 +187,9 @@ fn gen_trans_unit(unit: ast::TransUnit) -> Result<TokenStream> {
 }
 
 /// Generates the *matcher* (the left side) of a match arm.
-fn gen_arm_pattern(pattern: ast::ArmPattern, last: bool) -> Result<TokenStream> {
+fn gen_arm_pattern(pattern: ast::ArmPattern, last: bool, locale: &ast::LocaleDef) -> Result<TokenStream> {
+    let locale_ident = locale.name();
+
     let out = match pattern {
         ast::ArmPattern::Underscore => {
             quote! { _ }
@@ -138,45 +197,54 @@ fn gen_arm_pattern(pattern: ast::ArmPattern, last: bool) -> Result<TokenStream> 
 
         // The user only matches on the language and doesn't care about the
         // region.
-        ast::ArmPattern::Lang(lang) => {
+        ast::ArmPattern::Lang(lang_name) => {
             // We need to decide whether the user provided a constant language
             // to match against or a variable name to bind the language to. We
             // find out by trying to find a language with the given name. If
             // there doesn't exist one, we assume it's meant as a variable
             // binding.
-            if Locale::from_variant_str(&lang).is_some() {
+            if let Some(lang) = locale.get_lang(&lang_name) {
                 // It is referring to a variant of the `Locale` enum
-                quote! { mauzi::Locale::$lang(_) }
+                let lang_ident = lang.name();
+                if lang.has_regions() {
+                    quote! { $locale_ident::$lang_ident(_) }
+                } else {
+                    quote! { $locale_ident::$lang_ident }
+                }
             } else {
                 // It is a name for a variable binding
-                quote! { $lang }
+                let lang_ident = lang_name.exported();
+                quote! { $lang_ident }
             }
         }
 
         // The user matches against language and region (or at least wants to
         // bind the region to a variable).
-        ast::ArmPattern::WithRegion { lang, region } => {
+        ast::ArmPattern::WithRegion { lang: lang_name, region: region_name } => {
             // This time, the language has to be a variant of the `Locale`
             // enum. If not we're gonna emit an error.
-            let locale = match Locale::from_variant_str(&lang) {
+            let lang = match locale.get_lang(&lang_name) {
+                Some(l) => l,
                 None => {
                     return Err(format!(
                         "{} is not a valid language!",
-                        lang.as_str(),
+                        lang_name.as_str(),
                     ));
                 }
-                Some(l) => l,
             };
+
+            let lang_ident = lang.name();
+            let region_ident = region_name.exported();
 
             // Next we need to again figure out whether the user provided a
             // region constant or a variable name to bind to.
-            if locale.with_region_variant_str(&region).is_some() {
+            if lang.contains_region(&region_name) {
                 // Constant region to match against...
-                let region_ty = ast::Ident::new(locale.region_type_str());
-                quote! { mauzi::Locale::$lang(mauzi::$region_ty::$region) }
+                let region_ty = region_ty_name(&lang_name);
+                quote! { $locale_ident::$lang_ident($region_ty::$region_ident) }
             } else {
                 // Variable to bind to
-                quote! { mauzi::Locale::$lang($region) }
+                quote! { $locale_ident::$lang_ident($region_ident) }
             }
         }
     };

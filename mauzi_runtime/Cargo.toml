@@ -1,8 +1,0 @@
-[package]
-name = "mauzi_runtime"
-version = "0.1.0"
-authors = ["Lukas Kalbertodt <lukas.kalbertodt@gmail.com>"]
-
-publish = false
-
-[dependencies]

@@ -11,4 +11,3 @@ proc-macro = true
 
 [dependencies]
 literalext = { version = "0.1", default-features = false, features = ["proc-macro"] }
-mauzi_runtime = { path = "../mauzi_runtime" }

@@ -7,7 +7,6 @@
 
 extern crate literalext;
 extern crate proc_macro;
-extern crate mauzi_runtime;
 
 use std::result::Result as StdResult;
 

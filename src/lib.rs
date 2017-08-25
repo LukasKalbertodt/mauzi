@@ -2,7 +2,6 @@
 #![feature(proc_macro)]
 
 extern crate mauzi_macros;
-extern crate mauzi_runtime;
 
 
 // Currently, proc-macros can't be defined in a crate together with non-proc-
@@ -13,4 +12,3 @@ extern crate mauzi_runtime;
 //
 // In this main crate, we just reexport everything from those crates.
 pub use mauzi_macros::dict;
-pub use mauzi_runtime::*;

@@ -5,4 +5,3 @@ authors = ["Lukas Kalbertodt <lukas.kalbertodt@gmail.com>"]
 
 [dependencies]
 mauzi_macros = { path = "mauzi_macros/" }
-mauzi_runtime = { path = "mauzi_runtime/" }

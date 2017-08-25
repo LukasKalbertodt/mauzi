@@ -22,19 +22,51 @@ use proc_macro::{Span, Term, TokenNode, TokenStream, TokenTree};
 /// A dictionary, consisting of zero or more *translation units*.
 #[derive(Debug, Clone)]
 pub struct Dict {
-    pub locale: LocaleDef,
+    pub locale_def: LocaleDef,
     pub trans_units: Vec<TransUnit>,
 }
 
+/// Defines all languages and regions used by the dictionary.
 #[derive(Debug, Clone)]
 pub struct LocaleDef {
     pub langs: Vec<LocaleLang>,
 }
 
+impl LocaleDef {
+    /// Returns the exported name of the `Locale` enum.
+    pub fn name(&self) -> TokenTree {
+        Ident::export("Locale")
+    }
+
+    /// Returns the language with the given name if it exists.
+    pub fn get_lang(&self, lang_name: &str) -> Option<&LocaleLang> {
+        self.langs.iter()
+            .find(|lang| lang.name.as_str() == lang_name)
+    }
+}
+
+/// A language with an optional list of regions.
 #[derive(Debug, Clone)]
 pub struct LocaleLang {
     pub name: Ident,
     pub regions: Vec<Ident>,
+}
+
+impl LocaleLang {
+    /// The exported name of this language.
+    pub fn name(&self) -> TokenTree {
+        self.name.exported()
+    }
+
+    pub fn has_regions(&self) -> bool {
+        !self.regions.is_empty()
+    }
+
+    pub fn contains_region(&self, region_name: &str) -> bool {
+        self.regions.iter()
+            .find(|region| region.as_str() == region_name)
+            .is_some()
+    }
 }
 
 /// A named translation unit, consisting of a definition and optional
