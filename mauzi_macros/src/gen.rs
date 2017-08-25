@@ -187,7 +187,11 @@ fn gen_trans_unit(unit: ast::TransUnit, locale: &ast::LocaleDef) -> Result<Token
 }
 
 /// Generates the *matcher* (the left side) of a match arm.
-fn gen_arm_pattern(pattern: ast::ArmPattern, last: bool, locale: &ast::LocaleDef) -> Result<TokenStream> {
+fn gen_arm_pattern(
+    pattern: ast::ArmPattern,
+    last: bool,
+    locale: &ast::LocaleDef
+) -> Result<TokenStream> {
     let locale_ident = locale.name();
 
     let out = match pattern {
