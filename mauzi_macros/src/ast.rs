@@ -22,7 +22,19 @@ use proc_macro::{Span, Term, TokenNode, TokenStream, TokenTree};
 /// A dictionary, consisting of zero or more *translation units*.
 #[derive(Debug, Clone)]
 pub struct Dict {
+    pub locale: LocaleDef,
     pub trans_units: Vec<TransUnit>,
+}
+
+#[derive(Debug, Clone)]
+pub struct LocaleDef {
+    pub langs: Vec<LocaleLang>,
+}
+
+#[derive(Debug, Clone)]
+pub struct LocaleLang {
+    pub name: Ident,
+    pub regions: Vec<Ident>,
 }
 
 /// A named translation unit, consisting of a definition and optional

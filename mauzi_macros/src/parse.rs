@@ -11,13 +11,63 @@ use Result;
 pub fn parse(input: TokenStream) -> Result<ast::Dict> {
     let mut iter = Iter::new(input);
 
+    let locale = parse_locale_def(&mut iter)?;
+
     // Collect all translation units in this dictionary.
     let mut trans_units = Vec::new();
     while !iter.is_exhausted() {
         trans_units.push(parse_trans_unit(&mut iter)?);
     }
 
-    Ok(ast::Dict { trans_units })
+    Ok(ast::Dict { locale, trans_units })
+}
+
+fn parse_locale_def(iter: &mut Iter) -> Result<ast::LocaleDef> {
+    // We require `enum Locale` in the very beginning.
+    iter.eat_keyword("enum")?;
+    iter.eat_keyword("Locale")?;
+
+    let body = iter.eat_group_delimited_by(Delimiter::Brace)?;
+    let mut body_iter = Iter::new(body);
+
+    // Collect all langs.
+    let mut langs = Vec::new();
+    while !body_iter.is_exhausted() {
+        langs.push(parse_locale_variant(&mut body_iter)?);
+
+        // Maybe eat comma, if haven't reached the end
+        if !body_iter.is_exhausted() {
+            let _ = body_iter.eat_op_if(',');
+        }
+    }
+
+
+    Ok(ast::LocaleDef { langs })
+}
+
+fn parse_locale_variant(iter: &mut Iter) -> Result<ast::LocaleLang> {
+    let name = iter.eat_term()?;
+
+    let mut regions = Vec::new();
+    if let Ok(&TokenTree { kind: TokenNode::Group(Delimiter::Brace, _), .. }) = iter.peek_curr() {
+        let body = iter.eat_group_delimited_by(Delimiter::Brace)?;
+        let mut body_iter = Iter::new(body);
+
+        // Collect all regions.
+        while !body_iter.is_exhausted() {
+            regions.push(body_iter.eat_term()?);
+
+            // Maybe eat comma, if haven't reached the end
+            if !body_iter.is_exhausted() {
+                let _ = body_iter.eat_op_if(',');
+            }
+        }
+    }
+
+    Ok(ast::LocaleLang {
+        name,
+        regions,
+    })
 }
 
 /// Parses one translation unit from the given iterator.

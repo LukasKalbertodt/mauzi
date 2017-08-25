@@ -6,6 +6,11 @@ use mauzi::{dict, Locale, EnRegion};
 
 
 dict! {
+    enum Locale {
+        De,
+        En { Gb, Us },
+    }
+
     unit fav_color {
         De => "Was ist deine Lieblingsfarbe?",
         En(Gb) => "What is your favourite colour?",
