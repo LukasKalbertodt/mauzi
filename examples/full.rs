@@ -6,17 +6,17 @@ use mauzi::{dict, Locale, EnRegion};
 
 
 dict! {
-    fav_color {
+    unit fav_color {
         De => "Was ist deine Lieblingsfarbe?",
         En(Gb) => "What is your favourite colour?",
         En(Us) => "What is your favorite color?",
     }
-    greet(name: &str) {
+    unit greet(name: &str) {
         En(Gb) => "Hi {name}! Are you all right, mate?",
         En(Us) => "Hi {name}! How are you, buddy?",
         De => "Hallo {name}, wie geht's dir?",
     }
-    new_emails(count: u32) {
+    unit new_emails(count: u32) {
         En => {
             match count {
                 1 => "You have one new email".to_string(),

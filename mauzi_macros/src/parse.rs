@@ -22,7 +22,9 @@ pub fn parse(input: TokenStream) -> Result<ast::Dict> {
 
 /// Parses one translation unit from the given iterator.
 fn parse_trans_unit(iter: &mut Iter) -> Result<ast::TransUnit> {
-    // Each translation unit starts with a name (required).
+    // Each translation unit starts with the `unit` keyword followed by a name
+    // (required).
+    iter.eat_keyword("unit")?;
     let name = iter.eat_term()?;
 
     // Get the parsed parameters and the group (brace delimited block)
@@ -222,6 +224,21 @@ impl Iter {
             TokenTree { kind: TokenNode::Term(term), .. } => Ok(term.into()),
             other => return Err(format!("expected `term`, found '{}'", other)),
         }
+    }
+
+    /// Consumes the next token. If that token is not a term with the value
+    /// `expected`, an error is returned.
+    fn eat_keyword(&mut self, expected: &str) -> Result<()> {
+        let keyword = self.eat_term()?;
+        if keyword.as_str() != expected {
+            return Err(format!(
+                "expected '{}', found '{}'",
+                expected,
+                keyword.as_str(),
+            ));
+        }
+
+        Ok(())
     }
 
     /// Consumes and returns the next tt if it is a `Group`. Otherwise an `Err`
