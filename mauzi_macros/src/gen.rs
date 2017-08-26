@@ -226,10 +226,15 @@ fn gen_trans_unit(unit: ast::TransUnit, locale: &ast::LocaleDef) -> Result<Token
     let wildcard_arm = if usage.is_exhausted() {
         quote! {}
     } else {
-        // TODO: maybe we don't want to panic here! Best idea would be to let
-        // the user decide.
+        // TODO: let the user decide what we want to do here. Possibilites:
+        // - panic (should probably be avoided?)
+        // - print debug string (probably very useful during development)
+        // - compile time reror (probably very useful before releasing)
+        let msg = format!("[[MISSING TRANSLATION FOR '{}']]", unit.name.as_str());
+        let msg = TokenNode::Literal(Literal::string(&msg));
+
         quote! {
-            _ => panic!("missing translation"),
+            _ => $msg.into(),
         }
     };
 
