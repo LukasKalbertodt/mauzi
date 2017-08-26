@@ -3,5 +3,12 @@ name = "mauzi"
 version = "0.0.1"
 authors = ["Lukas Kalbertodt <lukas.kalbertodt@gmail.com>"]
 
+description = "Experimental i18n library using proc-macros"
+documentation = "https://docs.rs/mauzi/"
+repository = "https://github.com/LukasKalbertodt/mauzi"
+readme = "README.md"
+license = "MIT/Apache-2.0"
+
+
 [dependencies]
 mauzi_macros = { version = "0.0.1", path = "mauzi_macros/" }
