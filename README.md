@@ -44,8 +44,7 @@ dict::bar___this_is_a_bad_solution___baz___this_is_a_bad_solution___Dict
 ```
 
 [1]: https://github.com/rust-lang/rfcs/issues/959
-[2]: https://github.com/rust-
-lang/rust/issues/38356#issuecomment-323734922
+[2]: https://github.com/rust-lang/rust/issues/38356#issuecomment-323734922
 
 
 ### Loading of sub module files
