@@ -3,6 +3,10 @@ name = "mauzi_macros"
 version = "0.0.1"
 authors = ["Lukas Kalbertodt <lukas.kalbertodt@gmail.com>"]
 
+description = "Helper crate for 'mauzi'. Use 'mauzi' directly please."
+repository = "https://github.com/LukasKalbertodt/mauzi"
+license = "MIT/Apache-2.0"
+
 [lib]
 name = "mauzi_macros"
 proc-macro = true
