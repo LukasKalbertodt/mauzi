@@ -204,7 +204,7 @@ fn gen_trans_unit(unit: ast::TransUnit, locale: &ast::LocaleDef) -> Result<Token
     }).collect();
 
     let return_type = match unit.return_type {
-        Some(ty) => ty.0.parse::<TokenStream>().unwrap(),
+        Some(ref ty) => ty.0.parse::<TokenStream>().unwrap(),
         None => quote! { String },
     };
 
@@ -238,8 +238,14 @@ fn gen_trans_unit(unit: ast::TransUnit, locale: &ast::LocaleDef) -> Result<Token
         let msg = format!("[[MISSING TRANSLATION FOR '{}']]", unit.name.as_str());
         let msg = TokenNode::Literal(Literal::string(&msg));
 
-        quote! {
-            _ => $msg.into(),
+        if unit.return_type.is_some() {
+            quote! {
+                _ => panic!($msg),
+            }
+        } else {
+            quote! {
+                _ => $msg.into(),
+            }
         }
     };
 
