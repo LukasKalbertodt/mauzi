@@ -37,6 +37,11 @@ mod dict {
                 }
             }
         }
+
+        unit number_of_umlauts -> u32 {
+            De => { 3 },
+            En => { 0 },
+        }
     }
 }
 
@@ -56,5 +61,6 @@ fn main() {
         println!("greet       => {}", dict.greet("Ferris"));
         println!("fav_color   => {}", dict.fav_color());
         println!("new_emails  => {}", dict.new_emails(3));
+        println!("umlauts     => {}", dict.number_of_umlauts());
     }
 }
