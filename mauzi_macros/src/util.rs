@@ -28,6 +28,7 @@ impl PatternUsage {
                 data: lang.name,
             }
         }).collect();
+
         Self {
             root: UsageNode {
                 used: false,
