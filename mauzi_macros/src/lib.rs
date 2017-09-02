@@ -11,6 +11,7 @@ extern crate proc_macro;
 use std::result::Result as StdResult;
 
 mod ast;
+mod check;
 mod gen;
 mod parse;
 mod util;
@@ -25,7 +26,14 @@ type Result<T> = StdResult<T, String>;
 /// **TODO**: documentation
 #[proc_macro]
 pub fn mauzi(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    parse::parse(input)
-        .and_then(gen::gen)
+    use check::check;
+    use gen::gen;
+    use parse::parse;
+
+    parse(input)
+        .and_then(|ast| {
+            check(&ast).map(|_| ast)
+        })
+        .and_then(gen)
         .unwrap_or_else(|e| panic!(e))
 }
