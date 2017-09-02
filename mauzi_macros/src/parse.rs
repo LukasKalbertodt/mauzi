@@ -146,48 +146,73 @@ fn parse_module(iter: &mut Iter, root_path: &Path) -> Result<ast::Mod> {
 }
 
 /// Parses one translation unit from the given iterator.
+///
+/// ```
+/// translation_unit :=
+///     "unit" <term> [<unit_parameters>] [<return_type>] "{" <unit_body> "}"
+///```
 fn parse_trans_unit(iter: &mut Iter) -> Result<ast::TransUnit> {
     // Each translation unit starts with the `unit` keyword followed by a name.
     // The keyword was already eaten by the calling function.
     let name = iter.eat_term()?;
 
-    // Get the parsed parameters and the group (brace delimited block)
-    // representing the body.
-    let (params, body_group) = {
-        // The translation unit's name needs to be followed by a group. Two
-        // kinds of groups are valid: brace-delimited (body) and parenthesis
-        // delimited (parameters).
-        let (delim, group) = iter.eat_group()?;
-        if eq_delim(delim, Delimiter::Parenthesis) {
-            // The translation unit has parameters. It might still have 0
-            // parameters, but there is at least the `()` pair for parameters.
-            // Parse this group now.
-            let params = parse_unit_params(group)?;
-
-            // Get the next group which is hopefully a valid body
-            let body = iter.eat_group_delimited_by(Delimiter::Brace)?;
-
-            (params, body)
-        } else if eq_delim(delim, Delimiter::Brace) {
-            // This is already the group representing the body! This
-            // translation unit doesn't have any parameters.
-            (vec![], group)
-        } else {
-            // Syntax error!
-            let msg = format!(
-                "expected block starting with '{{' or '(', found block starting with {:?}",
-                delim
-            );
-            return Err(msg);
+    // Check if there is a paramter list and parse it if that's the case.
+    let params = match *iter.peek_curr()? {
+        TokenTree { kind: TokenNode::Group(Delimiter::Parenthesis, _), .. } => {
+            let param_group = iter.eat_group_delimited_by(Delimiter::Parenthesis)?;
+            let params = parse_unit_params(param_group)?;
+            Some(params)
         }
+        _ => None,
     };
 
-    // Parse the group representing the body.
-    let body = parse_unit_body(body_group)?;
+    // Check if there is a custom return type and parse it if that's the case.
+    let return_type = match *iter.peek_curr()? {
+        TokenTree { kind: TokenNode::Op('-', spacing), .. } => {
+            // Consume the '->' operator and emit errors if it isn't found
+            // correctly.
+            if eq_spacing(spacing, Spacing::Alone) {
+                return Err("expected '->' or '{{', found '-'".into());
+            }
+            iter.eat_op_if('-')?;
+            iter.eat_op_if('>')?;
+
+            // Parse actual return type.
+            Some(parse_type(iter)?)
+        }
+        _ => None,
+    };
+
+    // Parse the body or emit errors if the next token is not a group delimited
+    // by a brace.
+    let body = match iter.eat_curr()? {
+        TokenTree { kind: TokenNode::Group(Delimiter::Brace, ts), .. } => {
+            parse_unit_body(ts)?
+        }
+        ref other if return_type.is_some() => {
+            return Err(format!(
+                "expected block delimited by '{{', found '{}'",
+                other,
+            ))
+        }
+        ref other if params.is_some() => {
+            return Err(format!(
+                "expected '->' or a block delimited by '{{', found '{}'",
+                other,
+            ))
+        }
+        ref other => {
+            return Err(format!(
+                "expected '(', or '->' or a block delimited by '{{', found '{}'",
+                other,
+            ))
+        }
+    };
 
     Ok(ast::TransUnit {
         name,
         params,
+        return_type,
         body,
     })
 }
@@ -220,7 +245,7 @@ fn parse_unit_params(group: TokenStream) -> Result<Vec<ast::UnitParam>> {
 /// Parses a Rust type from the given iterator.
 ///
 /// Note that this is actually not really parsing a Rust type. It simply adds
-/// all potentially valid tokens (all except `,`) to a string buffer.
+/// all potentially valid tokens (all except `,` and '{') to a string buffer.
 /// Duplicating the Rust type parsing algorithm would be overkill. Thus we
 /// won't detect syntax errors at this stage.
 fn parse_type(iter: &mut Iter) -> Result<ast::Ty> {
@@ -233,6 +258,7 @@ fn parse_type(iter: &mut Iter) -> Result<ast::Ty> {
         match iter.peek_curr() {
             Err(_) => break,
             Ok(&TokenTree { kind: TokenNode::Op(op, _), .. }) if op == ',' => break,
+            Ok(&TokenTree { kind: TokenNode::Group(Delimiter::Brace, _), ..}) => break,
             _ => {},
         }
 

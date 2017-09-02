@@ -87,7 +87,8 @@ impl LocaleLang {
 #[derive(Debug, Clone)]
 pub struct TransUnit {
     pub name: Ident,
-    pub params: Vec<UnitParam>,
+    pub params: Option<Vec<UnitParam>>,
+    pub return_type: Option<Ty>,
     pub body: UnitBody,
 }
 

@@ -186,7 +186,7 @@ fn gen_trans_unit(unit: ast::TransUnit, locale: &ast::LocaleDef) -> Result<Token
 
     // Generate code for all parameters, merging all together into one
     // token stream.
-    let params: TokenStream = unit.params.iter().map(|param| {
+    let params: TokenStream = unit.params.into_iter().flat_map(|v| v).map(|param| {
         // We also need to make the name of the parameter available to the
         // user, because the raw body provided by the user uses those
         // parameters and those indents are in the user's expansion
