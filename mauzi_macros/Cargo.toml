@@ -1,6 +1,6 @@
 [package]
 name = "mauzi_macros"
-version = "0.0.1"
+version = "0.0.2"
 authors = ["Lukas Kalbertodt <lukas.kalbertodt@gmail.com>"]
 
 description = "Helper crate for 'mauzi'. Use 'mauzi' directly please."
