@@ -203,6 +203,11 @@ fn gen_trans_unit(unit: ast::TransUnit, locale: &ast::LocaleDef) -> Result<Token
         }
     }).collect();
 
+    let return_type = match unit.return_type {
+        Some(ty) => ty.0.parse::<TokenStream>().unwrap(),
+        None => quote! { String },
+    };
+
     // ===== Function body ===================================================
     // Here we store which variants of the enum were already tested to check
     // if the match is exhaustive.
@@ -240,7 +245,7 @@ fn gen_trans_unit(unit: ast::TransUnit, locale: &ast::LocaleDef) -> Result<Token
 
     // Combine everything into the method.
     Ok(quote! {
-        pub fn $name(&self $params) -> String {
+        pub fn $name(&self $params) -> $return_type {
             match self.locale {
                 $match_arms
                 $wildcard_arm
