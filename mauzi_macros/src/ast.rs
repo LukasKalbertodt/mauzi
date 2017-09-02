@@ -28,6 +28,15 @@ pub struct Dict {
     pub trans_units: Vec<TransUnit>,
 }
 
+impl Dict {
+    pub fn units(&self) -> UnitsIter {
+        UnitsIter {
+            units: &self.trans_units,
+            modules: self.modules.iter().collect(),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Mod {
     pub name: Ident,
@@ -276,5 +285,47 @@ impl Into<TokenStream> for Ident {
     /// name.
     fn into(self) -> TokenStream {
         TokenNode::Term(self.term).into()
+    }
+}
+
+
+
+// ===========================================================================
+// Helper
+// ===========================================================================
+
+pub struct UnitsIter<'a> {
+    units: &'a [TransUnit],
+    modules: Vec<&'a Mod>,
+}
+
+impl<'a> Iterator for UnitsIter<'a> {
+    type Item = &'a TransUnit;
+    fn next(&mut self) -> Option<Self::Item> {
+        // If we have no immediate units that we can yield, we have to get new
+        // ones from our modules.
+        if self.units.is_empty() {
+            // We resolve the next modules until we found some translation
+            // units.
+            while let Some(m) = self.modules.pop() {
+                self.units = &m.trans_units;
+                self.modules.extend(&m.modules);
+
+                if !self.units.is_empty() {
+                    break;
+                }
+            }
+        }
+
+        // If we don't have any translation units at this point, we have
+        // already resolved all modules without finding translation units. So
+        // we are exhausted.
+        if self.units.is_empty() {
+            None
+        } else {
+            let out = &self.units[0];
+            self.units = &self.units[1..];
+            Some(out)
+        }
     }
 }
