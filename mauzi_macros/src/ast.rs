@@ -15,6 +15,7 @@
 //!
 
 
+use std::fmt;
 use std::ops::Deref;
 use proc_macro::{Span, Term, TokenNode, TokenStream, TokenTree};
 
@@ -164,6 +165,18 @@ pub enum ArmPattern {
     },
 }
 
+impl fmt::Display for ArmPattern {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            ArmPattern::Underscore => "_".fmt(f),
+            ArmPattern::Lang(lang) => lang.fmt(f),
+            ArmPattern::WithRegion { lang, region } => {
+                write!(f, "{}({})", lang, region)
+            }
+        }
+    }
+}
+
 /// The body of one arm.
 ///
 /// Right now we support two kinds of bodies:
@@ -235,6 +248,12 @@ impl Ident {
 
     pub fn as_str(&self) -> &str {
         self.term.as_str()
+    }
+}
+
+impl fmt::Display for Ident {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.as_str().fmt(f)
     }
 }
 
