@@ -51,9 +51,9 @@ pub struct LocaleDef {
 }
 
 impl LocaleDef {
-    /// Returns the exported name of the `Locale` enum.
-    pub fn name(&self) -> TokenTree {
-        Ident::export("Locale")
+    /// Returns the name of the `Locale` enum.
+    pub fn name(&self) -> Ident {
+        Ident::exported("Locale")
     }
 
     /// Returns the language with the given name if it exists.
@@ -71,11 +71,6 @@ pub struct LocaleLang {
 }
 
 impl LocaleLang {
-    /// The exported name of this language.
-    pub fn name(&self) -> TokenTree {
-        self.name.exported()
-    }
-
     pub fn has_regions(&self) -> bool {
         !self.regions.is_empty()
     }
@@ -231,28 +226,38 @@ pub struct Ty(pub String);
 #[derive(Debug, Clone, Copy)]
 pub struct Ident {
     term: Term,
+    span: Option<Span>,
 }
 
 impl Ident {
-    pub fn new(s: &str) -> Self {
+    /// Creates a new ident from the given term and span.
+    pub fn new(term: Term, span: Span) -> Self {
+        Self {
+            term,
+            span: Some(span),
+        }
+    }
+
+    /// Creates a `Ident` which won't be visible to the calling code. It won't
+    /// have a span, so you can't emit a spanned diagnostic for this ident.
+    ///
+    /// This function should only be used for new, generated idents.
+    pub fn internal(s: &str) -> Self {
         Self {
             term: Term::intern(s),
+            span: None,
         }
     }
 
-    /// Returns a token tree representing this ident in the same expansion
-    /// context as the macro invocation. This means that the user can use this
-    /// name.
-    pub fn exported(&self) -> TokenTree {
-        TokenTree {
-            span: Span::call_site(),
-            kind: TokenNode::Term(self.term),
+    /// Returns an ident in the same expansion context as the macro invocation.
+    /// This means that the user can refer to this ident.
+    ///
+    /// This function should only be used for new, generated idents.
+    pub fn exported(s: &str) -> Self {
+        Self {
+            term: Term::intern(s),
+            span: Some(Span::call_site()),
         }
-    }
-
-    /// Intern the given string with `new()` and call `exported()`.
-    pub fn export(s: &str) -> TokenTree {
-        Self::new(s).exported()
     }
 
     pub fn as_str(&self) -> &str {
@@ -273,18 +278,26 @@ impl Deref for Ident {
     }
 }
 
-impl From<Term> for Ident {
-    fn from(term: Term) -> Self {
-        Self { term }
-    }
-}
-
 impl Into<TokenStream> for Ident {
     /// This implementation returns a token stream that represents this ident
     /// in a macro internal expansion context. Thus the user cannot access this
     /// name.
     fn into(self) -> TokenStream {
-        TokenNode::Term(self.term).into()
+
+        match self.span {
+            Some(span) => {
+                // If we have a span, we use it.
+                TokenTree {
+                    span: span,
+                    kind: TokenNode::Term(self.term),
+                }.into()
+            }
+            None => {
+                // Otherwise we don't use a span by converting a TokenNode into
+                // a TokenStream directly.
+                TokenNode::Term(self.term).into()
+            }
+        }
     }
 }
 

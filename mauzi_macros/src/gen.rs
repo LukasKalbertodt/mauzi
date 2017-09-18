@@ -1,7 +1,7 @@
-use proc_macro::{quote, Literal, TokenNode, TokenStream, TokenTree};
+use proc_macro::{quote, Literal, TokenNode, TokenStream};
 
 use Result;
-use ast;
+use ast::{self, Ident};
 use util::PatternUsage;
 
 
@@ -26,7 +26,7 @@ pub fn gen(dict: ast::Dict) -> Result<TokenStream> {
     // macro hygiene, we have to create special ident-tokens that live in the
     // same "context" as the invocation of `mauzi!{}` is in. Otherwise, the
     // names would be hidden/trapped inside of our macro context.
-    let new_ident = ast::Ident::export("new");
+    let new_ident = Ident::exported("new");
     let locale_ident = locale_def.name();
 
     let module_tree_def = gen_module(modules, trans_units, &locale_def, "")?;
@@ -59,7 +59,7 @@ fn gen_locale(locale_def: ast::LocaleDef) -> Result<TokenStream> {
 
     // Collect all variants of the `Locale` enum
     let langs = locale_def.langs.into_iter().map(|lang| {
-        let name = lang.name.exported();
+        let name = lang.name;
 
         if lang.regions.is_empty() {
             // If the language doesn't contain region, it's a simple
@@ -78,7 +78,6 @@ fn gen_locale(locale_def: ast::LocaleDef) -> Result<TokenStream> {
     let region_types = region_types.into_iter().map(|(ident, regions)| {
         let regions = regions.into_iter()
             .map(|region_name| {
-                let region_name = region_name.exported();
                 quote! { $region_name , }
             })
             .collect::<TokenStream>();
@@ -102,8 +101,8 @@ fn gen_locale(locale_def: ast::LocaleDef) -> Result<TokenStream> {
 }
 
 /// Simple helper to generate the name of the region type, e.g. `EnRegion`.
-fn region_ty_name(lang_name: &str) -> TokenTree {
-    ast::Ident::export(&format!("{}Region", lang_name))
+fn region_ty_name(lang_name: &str) -> Ident {
+    Ident::exported(&format!("{}Region", lang_name))
 }
 
 /// Generates the code for the given module and all of its submodules.
@@ -128,7 +127,7 @@ fn gen_module(
     let sub_modules = sub_modules.into_iter().map(|sub| {
         // Generate new prefix and type name ...
         let new_stem = format!("{}{}___this_is_a_bad_solution___", stem, sub.name.as_str());
-        let ty_name = ast::Ident::new(&format!("{}Dict", new_stem));
+        let ty_name = Ident::internal(&format!("{}Dict", new_stem));
 
         sub_module_names.push((sub.name, ty_name));
         gen_module(sub.modules, sub.trans_units, locale, &new_stem)
@@ -136,13 +135,11 @@ fn gen_module(
 
     // The fields for submodules in our `Dict` definition
     let sub_module_fields = sub_module_names.iter().map(|&(name, ty_name)| {
-        let name = name.exported();
         quote! { pub $name: $ty_name , }
     }).collect::<TokenStream>();
 
     // The initializer list of the submodules in our `Dict::new()` method
     let sub_module_field_inits = sub_module_names.iter().map(|&(name, ty_name)| {
-        let name = name.exported();
         quote! { $name: $ty_name::new(locale), }
     }).collect::<TokenStream>();
 
@@ -153,7 +150,7 @@ fn gen_module(
         .collect::<Result<TokenStream>>()?;
 
     // Our type name.
-    let ty_name = ast::Ident::new(&format!("{}Dict", stem));
+    let ty_name = Ident::internal(&format!("{}Dict", stem));
 
     Ok(quote! {
         $sub_modules
@@ -182,16 +179,12 @@ fn gen_module(
 fn gen_trans_unit(unit: ast::TransUnit, locale: &ast::LocaleDef) -> Result<TokenStream> {
     // ===== Function signature ==============================================
     // We want to make the name of the translation unit available to the user.
-    let name = unit.name.exported();
+    let fn_name = unit.name;
 
     // Generate code for all parameters, merging all together into one
     // token stream.
     let params: TokenStream = unit.params.into_iter().flat_map(|v| v).map(|param| {
-        // We also need to make the name of the parameter available to the
-        // user, because the raw body provided by the user uses those
-        // parameters and those indents are in the user's expansion
-        // context.
-        let name = param.name.exported();
+        let name = param.name;
 
         // We store the type as a simple `String` in the AST so we need to
         // parse it to a token stream. We know that it can be parsed
@@ -251,7 +244,7 @@ fn gen_trans_unit(unit: ast::TransUnit, locale: &ast::LocaleDef) -> Result<Token
 
     // Combine everything into the method.
     Ok(quote! {
-        pub fn $name(&self $params) -> $return_type {
+        pub fn $fn_name(&self $params) -> $return_type {
             match self.locale {
                 $match_arms
                 $wildcard_arm
@@ -287,7 +280,7 @@ fn gen_arm_pattern(
                 // It is referring to a variant of the `Locale` enum
                 usage.use_lang(&lang_name)?;
 
-                let lang_ident = lang.name();
+                let lang_ident = lang.name;
                 if lang.has_regions() {
                     quote! { $locale_ident::$lang_ident(_) }
                 } else {
@@ -297,8 +290,7 @@ fn gen_arm_pattern(
                 // It is a name for a variable binding
                 usage.use_wildcard(Some(&lang_name))?;
 
-                let lang_ident = lang_name.exported();
-                quote! { $lang_ident }
+                quote! { $lang_name }
             }
         }
 
@@ -317,8 +309,7 @@ fn gen_arm_pattern(
                 }
             };
 
-            let lang_ident = lang.name();
-            let region_ident = region_name.exported();
+            let lang_name = lang.name;
 
             // Next we need to again figure out whether the user provided a
             // region constant or a variable name to bind to.
@@ -327,12 +318,12 @@ fn gen_arm_pattern(
                 usage.use_region(&lang_name, &region_name)?;
 
                 let region_ty = region_ty_name(&lang_name);
-                quote! { $locale_ident::$lang_ident($region_ty::$region_ident) }
+                quote! { $locale_ident::$lang_name($region_ty::$region_name) }
             } else {
                 // Variable to bind to
                 usage.use_lang(&lang_name)?;
 
-                quote! { $locale_ident::$lang_ident($region_ident) }
+                quote! { $locale_ident::$lang_name($region_name) }
             }
         }
     };

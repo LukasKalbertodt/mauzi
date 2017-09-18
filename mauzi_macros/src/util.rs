@@ -33,7 +33,7 @@ impl PatternUsage {
             root: UsageNode {
                 used: false,
                 children,
-                data: Ident::new("Locale"),
+                data: Ident::internal("Locale"),
             }
         }
     }

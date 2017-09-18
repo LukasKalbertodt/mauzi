@@ -4,7 +4,7 @@ use std::path::Path;
 use proc_macro::{Delimiter, Literal, Spacing, TokenNode, TokenStream, TokenTree, TokenTreeIter};
 use literalext::LiteralExt;
 
-use ast;
+use ast::{self, Ident};
 use Result;
 
 
@@ -83,7 +83,9 @@ fn parse_items(iter: &mut Iter, root_path: &Path) -> Result<(Vec<ast::Mod>, Vec<
         match item_kind.as_str() {
             "unit" => trans_units.push(parse_trans_unit(iter)?),
             "mod" => modules.push(parse_module(iter, root_path)?),
-            s => return Err(format!("expected item, found {}", s)),
+            s => {
+                return Err(format!("expected item, found {}", s));
+            }
         }
     }
 
@@ -369,9 +371,11 @@ impl Iter {
 
     /// Consumes and returns the next tt if it is a `Term`. Otherwise an `Err`
     /// is returned.
-    fn eat_term(&mut self) -> Result<ast::Ident> {
+    fn eat_term(&mut self) -> Result<Ident> {
         match self.eat_curr()? {
-            TokenTree { kind: TokenNode::Term(term), .. } => Ok(term.into()),
+            TokenTree { kind: TokenNode::Term(term), span } => {
+                Ok(Ident::new(term, span))
+            }
             other => return Err(format!("expected `term`, found '{}'", other)),
         }
     }
