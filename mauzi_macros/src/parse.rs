@@ -187,7 +187,7 @@ fn parse_trans_unit(iter: &mut Iter) -> Result<ast::TransUnit> {
         TokenTree { kind: TokenNode::Op('-', spacing), span } => {
             // Consume the '->' operator and emit errors if it isn't found
             // correctly.
-            if eq_spacing(spacing, Spacing::Alone) {
+            if spacing == Spacing::Alone {
                 return err!(span, "expected '->' or '{{', found '-'");
             }
             iter.eat_op_if('-')?;
@@ -301,7 +301,7 @@ fn parse_unit_body(group: TokenStream) -> Result<ast::UnitBody> {
         // ... followed by a `=>` ...
         {
             let (spacing, span) = iter.eat_op_if('=')?;
-            if eq_spacing(spacing, Spacing::Alone) {
+            if spacing == Spacing::Alone {
                 return err!(span, "expected '=>', found '='");
             }
             iter.eat_op_if('>')?;
@@ -438,7 +438,7 @@ impl Iter {
     /// given `delim`. Otherwise an `Err` is returned.
     fn eat_group_delimited_by(&mut self, delim: Delimiter) -> Result<Spanned<TokenStream>> {
         let (actual_delim, group) = self.eat_group()?;
-        if eq_delim(delim, actual_delim) {
+        if delim == actual_delim {
             Ok(group)
         } else {
             err!(
@@ -532,25 +532,5 @@ impl TokenNodeExt for TokenNode {
             TokenNode::Literal(..) => true,
             _ => false,
         }
-    }
-}
-
-/// Compares two `Delimiter`
-fn eq_delim(a: Delimiter, b: Delimiter) -> bool {
-    use proc_macro::Delimiter::*;
-    match a {
-        Parenthesis => if let Parenthesis = b { true } else { false },
-        Brace => if let Brace = b { true } else { false },
-        Bracket => if let Bracket = b { true } else { false },
-        None => if let None = b { true } else { false },
-    }
-}
-
-/// Compares two `Spacing`
-fn eq_spacing(a: Spacing, b: Spacing) -> bool {
-    use proc_macro::Spacing::*;
-    match a {
-        Alone => if let Alone = b { true } else { false },
-        Joint => if let Joint = b { true } else { false },
     }
 }
