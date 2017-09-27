@@ -1,11 +1,16 @@
+use std::io;
 use std::iter::Peekable;
 use std::path::Path;
 
-use proc_macro::{Delimiter, Literal, Spacing, TokenNode, TokenStream, TokenTree, TokenTreeIter};
+use proc_macro::{
+    Delimiter, Diagnostic, Level, Literal, Spacing, Span, TokenNode,
+    TokenStream, TokenTree, TokenTreeIter
+};
 use literalext::LiteralExt;
 
 use ast::{self, Ident};
 use Result;
+use util::Spanned;
 
 
 /// Parses the input token stream into an abstract intermediate representation.
@@ -32,7 +37,7 @@ fn parse_locale_def(iter: &mut Iter) -> Result<ast::LocaleDef> {
     iter.eat_keyword("Locale")?;
 
     let body = iter.eat_group_delimited_by(Delimiter::Brace)?;
-    let mut body_iter = Iter::new(body);
+    let mut body_iter = Iter::new(body.obj);
 
     // Collect all langs.
     let mut langs = Vec::new();
@@ -55,7 +60,7 @@ fn parse_locale_variant(iter: &mut Iter) -> Result<ast::LocaleLang> {
     let mut regions = Vec::new();
     if let Ok(&TokenTree { kind: TokenNode::Group(Delimiter::Brace, _), .. }) = iter.peek_curr() {
         let body = iter.eat_group_delimited_by(Delimiter::Brace)?;
-        let mut body_iter = Iter::new(body);
+        let mut body_iter = Iter::new(body.obj);
 
         // Collect all regions.
         while !body_iter.is_exhausted() {
@@ -84,7 +89,7 @@ fn parse_items(iter: &mut Iter, root_path: &Path) -> Result<(Vec<ast::Mod>, Vec<
             "unit" => trans_units.push(parse_trans_unit(iter)?),
             "mod" => modules.push(parse_module(iter, root_path)?),
             s => {
-                return Err(format!("expected item, found {}", s));
+                return err!(item_kind.span().unwrap(), "expected item, found identifier '{}'", s);
             }
         }
     }
@@ -99,6 +104,7 @@ fn parse_module(iter: &mut Iter, root_path: &Path) -> Result<ast::Mod> {
     // A module declaration has the form `mod name;`. The `mod` keyword was
     // already consumed by the calling function.
     let name = iter.eat_term()?;
+    let name_span = name.span().unwrap();
     iter.eat_op_if(';')?;
 
     // Both valid paths.
@@ -110,18 +116,20 @@ fn parse_module(iter: &mut Iter, root_path: &Path) -> Result<ast::Mod> {
     // Check that only one of those two files actually exists.
     let p = match (p0.exists(), p1.exists()) {
         (false, false) => {
-            return Err(format!(
+            return err!(
+                name_span,
                 "cannot find either of those files: '{}' or '{}'",
                 p0.display(),
-                p1.display(),
-            ));
+                p1.display()
+            );
         }
         (true, true) => {
-            return Err(format!(
+            return err!(
+                name_span,
                 "Ambiguity when loading module: both, '{}' and '{}' exist",
                 p0.display(),
-                p1.display(),
-            ));
+                p1.display()
+            );
         }
         (true, false) => p0,
         (false, true) => p1,
@@ -129,14 +137,20 @@ fn parse_module(iter: &mut Iter, root_path: &Path) -> Result<ast::Mod> {
 
     // Read the file's content.
     let content = {
-        let mut file = File::open(&p).map_err(|e| e.to_string())?;
+        let map_err = |e: io::Error| {
+            name_span
+                .error(format!("error reading module file '{}'", name.as_str()))
+                .note(e.to_string())
+        };
+
+        let mut file = File::open(&p).map_err(&map_err)?;
         let mut content = String::new();
-        file.read_to_string(&mut content).map_err(|e| e.to_string())?;
+        file.read_to_string(&mut content).map_err(map_err)?;
         content
     };
 
     // Parse item in file.
-    let tokens: TokenStream = content.parse().map_err(|e| format!("{:?}", e))?;
+    let tokens: TokenStream = content.parse().map_err(|e| name_span.error(format!("{:?}", e)))?;
     let mut iter = Iter::new(tokens);
     let (modules, trans_units) = parse_items(&mut iter, p.parent().unwrap())?;
 
@@ -162,7 +176,7 @@ fn parse_trans_unit(iter: &mut Iter) -> Result<ast::TransUnit> {
     let params = match *iter.peek_curr()? {
         TokenTree { kind: TokenNode::Group(Delimiter::Parenthesis, _), .. } => {
             let param_group = iter.eat_group_delimited_by(Delimiter::Parenthesis)?;
-            let params = parse_unit_params(param_group)?;
+            let params = parse_unit_params(param_group.obj)?;
             Some(params)
         }
         _ => None,
@@ -170,11 +184,11 @@ fn parse_trans_unit(iter: &mut Iter) -> Result<ast::TransUnit> {
 
     // Check if there is a custom return type and parse it if that's the case.
     let return_type = match *iter.peek_curr()? {
-        TokenTree { kind: TokenNode::Op('-', spacing), .. } => {
+        TokenTree { kind: TokenNode::Op('-', spacing), span } => {
             // Consume the '->' operator and emit errors if it isn't found
             // correctly.
             if eq_spacing(spacing, Spacing::Alone) {
-                return Err("expected '->' or '{{', found '-'".into());
+                return err!(span, "expected '->' or '{{', found '-'");
             }
             iter.eat_op_if('-')?;
             iter.eat_op_if('>')?;
@@ -192,22 +206,25 @@ fn parse_trans_unit(iter: &mut Iter) -> Result<ast::TransUnit> {
             parse_unit_body(ts)?
         }
         ref other if return_type.is_some() => {
-            return Err(format!(
+            return err!(
+                other.span,
                 "expected block delimited by '{{', found '{}'",
-                other,
-            ))
+                other
+            );
         }
         ref other if params.is_some() => {
-            return Err(format!(
+            return err!(
+                other.span,
                 "expected '->' or a block delimited by '{{', found '{}'",
-                other,
-            ))
+                other
+            );
         }
         ref other => {
-            return Err(format!(
+            return err!(
+                other.span,
                 "expected '(', or '->' or a block delimited by '{{', found '{}'",
-                other,
-            ))
+                other
+            );
         }
     };
 
@@ -282,17 +299,20 @@ fn parse_unit_body(group: TokenStream) -> Result<ast::UnitBody> {
         let pattern = parse_arm_pattern(&mut iter)?;
 
         // ... followed by a `=>` ...
-        if eq_spacing(iter.eat_op_if('=')?, Spacing::Alone) {
-            return Err("expected '=>', found '='".into());
+        {
+            let (spacing, span) = iter.eat_op_if('=')?;
+            if eq_spacing(spacing, Spacing::Alone) {
+                return err!(span, "expected '=>', found '='");
+            }
+            iter.eat_op_if('>')?;
         }
-        iter.eat_op_if('>')?;
 
         // ... followed by the actual body.
         let body = parse_arm_body(&mut iter)?;
 
         // Maybe eat comma, if haven't reached the end
         if !iter.is_exhausted() {
-            if body.is_raw_block() {
+            if body.obj.is_raw_block() {
                 // If the last body was a raw block (delimited by braces) it's
                 // ok to not have a comma.
                 let _ = iter.eat_op_if(',');
@@ -312,9 +332,9 @@ fn parse_unit_body(group: TokenStream) -> Result<ast::UnitBody> {
 
 /// Parses one arm's pattern from the given iterator.
 fn parse_arm_pattern(iter: &mut Iter) -> Result<ast::ArmPattern> {
-    if iter.eat_op_if('_').is_ok() {
+    if let Ok((_, span)) = iter.eat_op_if('_') {
         // The pattern is a wildcard pattern.
-        Ok(ast::ArmPattern::Underscore)
+        Ok(ast::ArmPattern::Underscore(span))
     } else {
         // The pattern has at least the language component which starts with
         // a term.
@@ -329,10 +349,10 @@ fn parse_arm_pattern(iter: &mut Iter) -> Result<ast::ArmPattern> {
             let region_group = iter.eat_group_delimited_by(Delimiter::Parenthesis)?;
 
             // Inside the group we expect only one term and nothing more
-            let mut inner_iter = Iter::new(region_group);
+            let mut inner_iter = Iter::new(region_group.obj);
             let region = inner_iter.eat_term()?;
             if let Ok(tok) = inner_iter.eat_curr() {
-                return Err(format!("didn't expect token '{:?}' in matcher", tok));
+                return err!(tok.span, "didn't expect token '{:?}' in matcher", tok);
             }
 
             Ok(ast::ArmPattern::WithRegion {
@@ -344,18 +364,18 @@ fn parse_arm_pattern(iter: &mut Iter) -> Result<ast::ArmPattern> {
 }
 
 /// Parses the body of one arm.
-fn parse_arm_body(iter: &mut Iter) -> Result<ast::ArmBody> {
+fn parse_arm_body(iter: &mut Iter) -> Result<Spanned<ast::ArmBody>> {
     // If we encounter a group next, we know the body is raw Rust.
     if iter.peek_curr()?.kind.is_group() {
         // Raw Rust body
         let group = iter.eat_group_delimited_by(Delimiter::Brace)?;
-        Ok(ast::ArmBody::Raw(group))
+        Ok(Spanned::new(ast::ArmBody::Raw(group.obj), group.span))
     } else {
         // A standard body consisting of a single literal.
         let lit = iter.eat_literal()?;
-        match lit.parse_string() {
-            Some(s) => Ok(ast::ArmBody::Str(s)),
-            None => Err(format!("expected string literal, found '{}'", lit)),
+        match lit.obj.parse_string() {
+            Some(s) => Ok(Spanned::new(ast::ArmBody::Str(s), lit.span)),
+            None => err!(lit.span, "expected string literal, found '{}'", lit.obj),
         }
     }
 }
@@ -376,72 +396,77 @@ impl Iter {
             TokenTree { kind: TokenNode::Term(term), span } => {
                 Ok(Ident::new(term, span))
             }
-            other => return Err(format!("expected `term`, found '{}'", other)),
+            other => {
+                err!(other.span, "expected an identifier, found '{}'", other)
+            },
         }
     }
 
     /// Consumes the next token. If that token is not a term with the value
     /// `expected`, an error is returned.
     fn eat_keyword(&mut self, expected: &str) -> Result<()> {
-        let keyword = self.eat_term()?;
-        if keyword.as_str() != expected {
-            return Err(format!(
-                "expected '{}', found '{}'",
-                expected,
-                keyword.as_str(),
-            ));
-        }
+        let keyword = self.eat_term();
 
-        Ok(())
+        match keyword {
+            Ok(keyword) if keyword.as_str() == expected => Ok(()),
+            Ok(keyword) => {
+                err!(
+                    keyword.span().unwrap(),
+                    "expected keyword '{}', found identifier '{}'",
+                    expected,
+                    keyword
+                )
+            }
+            Err(e) => {
+                note!(e, "expected keyword '{}'", expected)
+            }
+        }
     }
 
     /// Consumes and returns the next tt if it is a `Group`. Otherwise an `Err`
     /// is returned.
-    fn eat_group(&mut self) -> Result<(Delimiter, TokenStream)> {
+    fn eat_group(&mut self) -> Result<(Delimiter, Spanned<TokenStream>)> {
         match self.eat_curr()? {
-            TokenTree { kind: TokenNode::Group(delim, ts), .. } => Ok((delim, ts)),
-            other => return Err(format!("expected `group`, found '{}'", other)),
+            TokenTree { kind: TokenNode::Group(delim, ts), span } => {
+                Ok((delim, Spanned::new(ts, span)))
+            }
+            other => err!(other.span, "expected block (delimited token stream), found '{}'", other),
         }
     }
 
     /// Consumes and returns the next tt if it is a `Group` delimited by the
     /// given `delim`. Otherwise an `Err` is returned.
-    fn eat_group_delimited_by(&mut self, delim: Delimiter) -> Result<TokenStream> {
+    fn eat_group_delimited_by(&mut self, delim: Delimiter) -> Result<Spanned<TokenStream>> {
         let (actual_delim, group) = self.eat_group()?;
         if eq_delim(delim, actual_delim) {
             Ok(group)
         } else {
-            let msg = format!(
-                "expected block starting with '{:?}', found block starting with '{:?}'",
+            err!(
+                group.span,
+                "expected block delimited by '{:?}', found block delimited by '{:?}'",
                 delim,
-                actual_delim,
-            );
-            Err(msg)
+                actual_delim
+            )
         }
     }
 
     /// Consumes and returns the next tt if it is a `Literal`. Otherwise an
     /// `Err` is returned.
-    fn eat_literal(&mut self) -> Result<Literal> {
+    fn eat_literal(&mut self) -> Result<Spanned<Literal>> {
         match self.eat_curr()? {
-            TokenTree { kind: TokenNode::Literal(lit), .. } => Ok(lit),
-            other => return Err(format!("expected `group`, found '{}'", other)),
+            TokenTree { kind: TokenNode::Literal(lit), span } => Ok(Spanned::new(lit, span)),
+            other => err!(other.span, "expected a literal, found '{}'", other),
         }
     }
 
     /// Consumes and returns the next tt if it equals the given operator.
     /// Otherwise an `Err` is returned.
-    fn eat_op_if(&mut self, op: char) -> Result<Spacing> {
+    fn eat_op_if(&mut self, op: char) -> Result<(Spacing, Span)> {
         let out = match *self.peek_curr()? {
-            TokenTree { kind: TokenNode::Op(found_op, spacing), .. } => {
-                if found_op == op {
-                    spacing
-                } else {
-                    let msg = format!("expected '{}', found '{}'", op, found_op);
-                    return Err(msg)
-                }
+            TokenTree { kind: TokenNode::Op(found_op, spacing), span } if found_op == op => {
+                (spacing, span)
             }
-            ref other => return Err(format!("expected '{}', found '{}'", op, other)),
+            ref other => return err!(other.span, "expected '{}', found '{}'", op, other),
         };
         self.bump();
         Ok(out)
@@ -449,12 +474,12 @@ impl Iter {
 
     /// Peeks onto the current tt. Returns an error if there is no next tt.
     fn peek_curr(&mut self) -> Result<&TokenTree> {
-        self.0.peek().ok_or("unexpected EOF".into())
+        self.0.peek().ok_or(Diagnostic::new(Level::Error, "unexpected EOF"))
     }
 
     /// Consumes and returns the current tt or an error if there is no next tt.
     fn eat_curr(&mut self) -> Result<TokenTree> {
-        self.0.next().ok_or("unexpected EOF".into())
+        self.0.next().ok_or(Diagnostic::new(Level::Error, "unexpected EOF"))
     }
 
     /// Returns `true` if the iterator is exhausted and won't generate new

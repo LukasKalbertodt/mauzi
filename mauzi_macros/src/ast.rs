@@ -19,6 +19,8 @@ use std::fmt;
 use std::ops::Deref;
 use proc_macro::{Span, Term, TokenNode, TokenStream, TokenTree};
 
+use util::Spanned;
+
 
 /// A dictionary, consisting of zero or more *translation units*.
 #[derive(Debug, Clone)]
@@ -134,7 +136,7 @@ pub struct UnitBody {
 #[derive(Debug, Clone)]
 pub struct UnitArm {
     pub pattern: ArmPattern,
-    pub body: ArmBody,
+    pub body: Spanned<ArmBody>,
 }
 
 /// One arm's pattern.
@@ -161,7 +163,7 @@ pub struct UnitArm {
 /// ```
 #[derive(Debug, Clone)]
 pub enum ArmPattern {
-    Underscore,
+    Underscore(Span),
     Lang(Ident),
     WithRegion {
         lang: Ident,
@@ -169,10 +171,24 @@ pub enum ArmPattern {
     },
 }
 
+impl ArmPattern {
+    /// Assumes all idents used in this pattern have spans.
+    #[allow(dead_code)]
+    pub fn span(&self) -> Span {
+        match *self {
+            ArmPattern::Underscore(span) => span,
+            ArmPattern::Lang(lang) => lang.span().unwrap(),
+
+            // TODO: join these two spans!
+            ArmPattern::WithRegion { lang, .. } => lang.span().unwrap(),
+        }
+    }
+}
+
 impl fmt::Display for ArmPattern {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            ArmPattern::Underscore => "_".fmt(f),
+            ArmPattern::Underscore(_) => "_".fmt(f),
             ArmPattern::Lang(lang) => lang.fmt(f),
             ArmPattern::WithRegion { lang, region } => {
                 write!(f, "{}({})", lang, region)
@@ -262,6 +278,10 @@ impl Ident {
 
     pub fn as_str(&self) -> &str {
         self.term.as_str()
+    }
+
+    pub fn span(&self) -> Option<Span> {
+        self.span
     }
 }
 

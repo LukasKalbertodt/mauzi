@@ -15,15 +15,16 @@ pub fn check(ast: &ast::Dict) -> Result<()> {
 fn custom_return_implies_raw_body(ast: &ast::Dict) -> Result<()> {
     for unit in ast.units().filter(|unit| unit.return_type.is_some()) {
         let not_raw = unit.body.arms.iter()
-            .find(|arm| !arm.body.is_raw_block());
+            .find(|arm| !arm.body.obj.is_raw_block());
 
         if let Some(not_raw) = not_raw {
-            return Err(format!(
-                "translation unit '{}' has custom return type, but its arm \
+            return err!(
+                not_raw.body.span,
+                "translation unit '{}' has a custom return type, but its arm \
                     '{}' doesn't have a raw body (required)",
                 unit.name,
-                not_raw.pattern,
-            ))
+                not_raw.pattern
+            )
         }
     }
 

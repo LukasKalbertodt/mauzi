@@ -2,7 +2,7 @@ use proc_macro::{quote, Literal, TokenNode, TokenStream};
 
 use Result;
 use ast::{self, Ident};
-use util::PatternUsage;
+use util::{PatternUsage, Spanned};
 
 
 /// Generates the resulting Rust code from the AST.
@@ -262,8 +262,8 @@ fn gen_arm_pattern(
     let locale_ident = locale.name();
 
     let out = match pattern {
-        ast::ArmPattern::Underscore => {
-            usage.use_wildcard(None)?;
+        ast::ArmPattern::Underscore(span) => {
+            usage.use_wildcard(span, None)?;
 
             quote! { _ }
         }
@@ -288,7 +288,7 @@ fn gen_arm_pattern(
                 }
             } else {
                 // It is a name for a variable binding
-                usage.use_wildcard(Some(&lang_name))?;
+                usage.use_wildcard(lang_name.span().unwrap(), Some(&lang_name))?;
 
                 quote! { $lang_name }
             }
@@ -302,10 +302,11 @@ fn gen_arm_pattern(
             let lang = match locale.get_lang(&lang_name) {
                 Some(l) => l,
                 None => {
-                    return Err(format!(
+                    return err!(
+                        lang_name.span().unwrap(),
                         "{} is not a valid language!",
-                        lang_name.as_str(),
-                    ));
+                        lang_name.as_str()
+                    );
                 }
             };
 
@@ -332,8 +333,9 @@ fn gen_arm_pattern(
 }
 
 /// Generates the body of a match arm.
-fn gen_arm_body(body: ast::ArmBody) -> Result<TokenStream> {
-    match body {
+fn gen_arm_body(body: Spanned<ast::ArmBody>) -> Result<TokenStream> {
+    let body_span = body.span;
+    match body.obj {
         ast::ArmBody::Raw(ts) => Ok(ts),
         ast::ArmBody::Str(s) => {
             // We need to convert the fancy placeholder string into a
@@ -398,7 +400,13 @@ fn gen_arm_body(body: ast::ArmBody) -> Result<TokenStream> {
             let format_args = args.into_iter().map(|arg_s| {
                 // Try to parse.
                 arg_s.parse::<TokenStream>()
-                    .map_err(|e| format!("not a valid Rust expression in placeholder: {:?}", e))
+                    .map_err(|e| {
+                        // TODO: we should construct the span of the actual
+                        // argument
+                        body_span.error(
+                            format!("not a valid Rust expression in placeholder: {:?}", e)
+                        )
+                    })
                     // Add a leading comma for concatting all arguments.
                     .map(|ts| quote! { , $ts })
             }).collect::<Result<TokenStream>>()?;
